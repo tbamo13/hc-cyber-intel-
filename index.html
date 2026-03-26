@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#060A12" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="CyberIntel" />
+  <meta name="description" content="Healthcare Cybersecurity Intelligence Dashboard" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <title>HC Cyber Intel</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700;800&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body, #root { min-height: 100vh; min-height: 100dvh; }
+    body { background: #060A12; color: #fff; font-family: 'IBM Plex Sans', sans-serif; -webkit-font-smoothing: antialiased; }
+
+    @keyframes slideUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes scanLine { 0% { transform: translateX(-100%); } 100% { transform: translateX(200%); } }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    @keyframes gridMove { 0% { background-position: 0 0; } 100% { background-position: 40px 40px; } }
+
+    .pulse-ring { animation: pulse 1.5s ease-in-out infinite; }
+
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+
+    /* Prevent pull-to-refresh in PWA */
+    body { overscroll-behavior-y: contain; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.5/babel.min.js"></script>
+
+  <script type="text/babel" data-type="module">
+    const { useState, useEffect, useCallback } = React;
+
+    const API_KEY_STORAGE = 'hc_cyber_intel_api_key';
+
+    const CATEGORIES = [
+      { id: "breaches", label: "Healthcare Breaches", icon: "\u{1F3E5}", query: "healthcare cybersecurity breach incident 2026 hospital health system data breach", color: "#FF3B5C" },
+      { id: "cves", label: "Critical CVEs", icon: "\u{1F6E1}\uFE0F", query: "critical CVE vulnerability 2026 healthcare medical device EPSS CVSS high severity", color: "#00E5FF" },
+      { id: "hipaa", label: "HIPAA & Regulations", icon: "\u2696\uFE0F", query: "HIPAA cybersecurity regulation update 2026 HHS OCR healthcare compliance rule change", color: "#FFAB40" },
+      { id: "threats", label: "Threat Intelligence", icon: "\u{1F50D}", query: "ransomware threat healthcare 2026 threat actor APT hospital attack campaign", color: "#B388FF" },
+      { id: "zscaler", label: "Zscaler & Zero Trust", icon: "\u26A1", query: "Zscaler zero trust healthcare cybersecurity 2026 ZTNA SSE SASE health system", color: "#00E676" },
+    ];
+
+    const SYSTEM_PROMPT = `You are a senior healthcare cybersecurity intelligence analyst. Your audience is a Zscaler healthcare account executive who needs competitive intelligence.
+
+IMPORTANT: Return ONLY valid JSON with no markdown, no backticks, no preamble. The JSON must be an array of objects.
+
+Each object must have these exact fields:
+- "title": string - concise headline (max 12 words)
+- "summary": string - 2-3 sentence briefing with specific details (names, dates, numbers)
+- "severity": string - one of "CRITICAL", "HIGH", "MEDIUM", "LOW"
+- "date": string - approximate date like "Mar 2026" or "Recent"
+- "source": string - publication or source name
+- "zscaler_angle": string - one sentence on how this is relevant to a Zscaler sales conversation (reference ZIA, ZPA, ZDX, or Zero Trust where appropriate)
+- "tags": array of strings - 2-4 relevant tags
+
+Return 5-8 items, sorted by severity then recency.`;
+
+    function ApiKeyPrompt({ onSave }) {
+      const [key, setKey] = useState('');
+      return (
+        <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div style={{ maxWidth: 400, width: '100%' }}>
+            <div style={{ fontSize: 48, textAlign: 'center', marginBottom: 16 }}>{"\u{1F6E1}\uFE0F"}</div>
+            <h1 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 24, fontWeight: 700, textAlign: 'center', marginBottom: 8,
+              background: 'linear-gradient(135deg, #fff 30%, #00E5FF 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+              HC Cyber Intel
+            </h1>
+            <p style={{ textAlign: 'center', fontSize: 13, color: 'rgba(255,255,255,0.4)', marginBottom: 28 }}>
+              Enter your Anthropic API key to power live intelligence scans. Your key is stored locally on this device only.
+            </p>
+            <input
+              type="password"
+              placeholder="sk-ant-..."
+              value={key}
+              onChange={e => setKey(e.target.value)}
+              style={{
+                width: '100%', padding: '14px 16px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: 10, color: '#fff', fontSize: 14, fontFamily: "'JetBrains Mono', monospace", marginBottom: 12, outline: 'none'
+              }}
+            />
+            <button onClick={() => { if (key.trim()) { localStorage.setItem(API_KEY_STORAGE, key.trim()); onSave(key.trim()); }}}
+              style={{
+                width: '100%', padding: '14px', background: 'linear-gradient(135deg, rgba(0,229,255,0.15), rgba(0,230,118,0.15))',
+                border: '1px solid rgba(0,229,255,0.25)', borderRadius: 10, color: '#00E5FF', fontSize: 15, fontWeight: 700,
+                fontFamily: "'Space Grotesk', sans-serif", cursor: 'pointer'
+              }}>
+              Activate Intelligence Feed
+            </button>
+            <p style={{ textAlign: 'center', fontSize: 11, color: 'rgba(255,255,255,0.2)', marginTop: 16 }}>
+              Get your key at console.anthropic.com
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    function IntelCard({ item, index, categoryColor }) {
+      const [expanded, setExpanded] = useState(false);
+      const severityColors = { CRITICAL: "#FF1744", HIGH: "#FF6D00", MEDIUM: "#FFAB40", LOW: "#69F0AE" };
+      const sevColor = severityColors[item.severity] || "#888";
+
+      return (
+        <div onClick={() => setExpanded(!expanded)}
+          style={{
+            background: 'rgba(10, 14, 23, 0.85)', border: `1px solid ${expanded ? categoryColor : 'rgba(255,255,255,0.06)'}`,
+            borderLeft: `3px solid ${sevColor}`, borderRadius: 8, padding: '14px 16px', cursor: 'pointer',
+            transition: 'all 0.25s ease', animationDelay: `${index * 60}ms`, animation: 'slideUp 0.4s ease both'
+          }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: sevColor, background: `${sevColor}18`, padding: '2px 7px', borderRadius: 3, fontFamily: "'JetBrains Mono', monospace" }}>{item.severity}</span>
+                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', fontFamily: "'JetBrains Mono', monospace" }}>{item.date}</span>
+                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)' }}>via {item.source}</span>
+              </div>
+              <h3 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'rgba(255,255,255,0.92)', fontFamily: "'Space Grotesk', sans-serif", lineHeight: 1.35 }}>{item.title}</h3>
+            </div>
+            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', flexShrink: 0, marginTop: 2 }}>{expanded ? '\u25B2' : '\u25BC'}</span>
+          </div>
+
+          {expanded && (
+            <div style={{ marginTop: 12 }}>
+              <p style={{ margin: '0 0 10px 0', fontSize: 13, color: 'rgba(255,255,255,0.7)', lineHeight: 1.55, fontFamily: "'IBM Plex Sans', sans-serif" }}>{item.summary}</p>
+              <div style={{ background: 'rgba(0,230,118,0.06)', border: '1px solid rgba(0,230,118,0.15)', borderRadius: 6, padding: '8px 12px', marginBottom: 10 }}>
+                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.5, color: '#00E676', marginBottom: 4, fontFamily: "'JetBrains Mono', monospace" }}>{"\u26A1"} ZSCALER ANGLE</div>
+                <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,0.65)', lineHeight: 1.45, fontFamily: "'IBM Plex Sans', sans-serif" }}>{item.zscaler_angle}</p>
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {(item.tags || []).map((tag, i) => (
+                  <span key={i} style={{ fontSize: 10, color: categoryColor, background: `${categoryColor}15`, border: `1px solid ${categoryColor}30`, padding: '2px 8px', borderRadius: 20, fontFamily: "'JetBrains Mono', monospace" }}>{tag}</span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function CategoryPanel({ category, data, loading, error, onRefresh }) {
+      return (
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, padding: '0 2px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 20 }}>{category.icon}</span>
+              <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: category.color, fontFamily: "'Space Grotesk', sans-serif", letterSpacing: -0.3 }}>{category.label}</h2>
+              {data && <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', fontFamily: "'JetBrains Mono', monospace" }}>{data.length} items</span>}
+            </div>
+            <button onClick={() => onRefresh(category.id)} disabled={loading}
+              style={{ background: loading ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)',
+                color: loading ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.5)', padding: '4px 12px', borderRadius: 5, fontSize: 11,
+                cursor: loading ? 'not-allowed' : 'pointer', fontFamily: "'JetBrains Mono', monospace", transition: 'all 0.2s' }}>
+              {loading ? '\u27F3 Scanning...' : '\u21BB Refresh'}
+            </button>
+          </div>
+          {loading && !data && (
+            <div style={{ padding: 30, textAlign: 'center' }}>
+              <div className="pulse-ring" style={{ color: category.color, fontSize: 13, fontFamily: "'JetBrains Mono', monospace" }}>Querying intelligence sources...</div>
+            </div>
+          )}
+          {error && (
+            <div style={{ background: 'rgba(255,23,68,0.08)', border: '1px solid rgba(255,23,68,0.2)', borderRadius: 8, padding: 14, color: '#FF8A80', fontSize: 12, fontFamily: "'IBM Plex Sans', sans-serif" }}>
+              {"\u26A0"} {error}
+            </div>
+          )}
+          {data && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {data.map((item, i) => <IntelCard key={i} item={item} index={i} categoryColor={category.color} />)}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function App() {
+      const [apiKey, setApiKey] = useState(localStorage.getItem(API_KEY_STORAGE) || '');
+      const [results, setResults] = useState({});
+      const [loading, setLoading] = useState({});
+      const [errors, setErrors] = useState({});
+      const [lastUpdated, setLastUpdated] = useState(null);
+      const [activeFilter, setActiveFilter] = useState('all');
+      const [scanning, setScanning] = useState(false);
+      const [scanProgress, setScanProgress] = useState(0);
+      const [showSettings, setShowSettings] = useState(false);
+
+      if (!apiKey) return <ApiKeyPrompt onSave={setApiKey} />;
+
+      const fetchCategory = async (category) => {
+        setLoading(p => ({ ...p, [category.id]: true }));
+        setErrors(p => ({ ...p, [category.id]: null }));
+        try {
+          const response = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+            body: JSON.stringify({
+              model: 'claude-sonnet-4-20250514',
+              max_tokens: 4096,
+              system: SYSTEM_PROMPT,
+              tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }],
+              messages: [{ role: 'user', content: `Search the web thoroughly for the latest intelligence on: ${category.query}\n\nAfter searching, return ONLY a JSON array of intelligence items. No markdown, no backticks, no explanation. Just the raw JSON array.` }],
+            }),
+          });
+          const data = await response.json();
+          if (data.error) throw new Error(data.error.message || 'API error');
+          const textBlocks = (data.content || []).filter(b => b.type === 'text').map(b => b.text);
+          const fullText = textBlocks.join('\n');
+          let jsonStr = fullText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+          const startIdx = jsonStr.indexOf('[');
+          const endIdx = jsonStr.lastIndexOf(']');
+          if (startIdx !== -1 && endIdx !== -1) jsonStr = jsonStr.substring(startIdx, endIdx + 1);
+          const items = JSON.parse(jsonStr);
+          setResults(p => ({ ...p, [category.id]: items }));
+        } catch (err) {
+          console.error(`Error fetching ${category.id}:`, err);
+          setErrors(p => ({ ...p, [category.id]: `Failed: ${err.message}` }));
+        } finally {
+          setLoading(p => ({ ...p, [category.id]: false }));
+        }
+      };
+
+      const runFullScan = async () => {
+        setScanning(true);
+        setScanProgress(0);
+        for (let i = 0; i < CATEGORIES.length; i++) {
+          setScanProgress((i / CATEGORIES.length) * 100);
+          await fetchCategory(CATEGORIES[i]);
+          setScanProgress(((i + 1) / CATEGORIES.length) * 100);
+        }
+        setLastUpdated(new Date());
+        setScanning(false);
+      };
+
+      const handleRefresh = (categoryId) => {
+        const cat = CATEGORIES.find(c => c.id === categoryId);
+        if (cat) fetchCategory(cat);
+      };
+
+      const clearKey = () => { localStorage.removeItem(API_KEY_STORAGE); setApiKey(''); };
+
+      const filteredCategories = activeFilter === 'all' ? CATEGORIES : CATEGORIES.filter(c => c.id === activeFilter);
+      const totalItems = Object.values(results).reduce((acc, items) => acc + (items?.length || 0), 0);
+      const criticalCount = Object.values(results).flat().filter(i => i?.severity === 'CRITICAL').length;
+
+      return (
+        <div style={{ minHeight: '100vh', background: '#060A12', color: 'white', fontFamily: "'IBM Plex Sans', sans-serif", position: 'relative', overflow: 'hidden' }}>
+          {/* Background grid */}
+          <div style={{ position: 'fixed', inset: 0, backgroundImage: 'linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px)', backgroundSize: '40px 40px', animation: 'gridMove 8s linear infinite', pointerEvents: 'none', zIndex: 0 }} />
+          <div style={{ position: 'fixed', top: -200, right: -200, width: 500, height: 500, background: 'radial-gradient(circle, rgba(0,229,255,0.06) 0%, transparent 70%)', pointerEvents: 'none', zIndex: 0 }} />
+
+          <div style={{ position: 'relative', zIndex: 1, maxWidth: 900, margin: '0 auto', padding: '24px 20px' }}>
+            {/* Header */}
+            <div style={{ marginBottom: 28 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: scanning ? '#FFAB40' : '#00E676', boxShadow: scanning ? '0 0 12px #FFAB40' : '0 0 12px #00E676', animation: scanning ? 'pulse 0.8s ease infinite' : 'none' }} />
+                  <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 3, color: 'rgba(255,255,255,0.35)', fontFamily: "'JetBrains Mono', monospace", textTransform: 'uppercase' }}>
+                    {scanning ? 'Scanning Sources' : 'Intelligence Ready'}
+                  </span>
+                </div>
+                <button onClick={() => setShowSettings(!showSettings)}
+                  style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.3)', fontSize: 18, cursor: 'pointer', padding: 4 }}>
+                  {"\u2699\uFE0F"}
+                </button>
+              </div>
+
+              {showSettings && (
+                <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: 14, marginTop: 12, marginBottom: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', fontFamily: "'JetBrains Mono', monospace" }}>API Key: sk-...{apiKey.slice(-6)}</span>
+                    <button onClick={clearKey} style={{ background: 'rgba(255,23,68,0.1)', border: '1px solid rgba(255,23,68,0.2)', color: '#FF8A80', padding: '4px 12px', borderRadius: 5, fontSize: 11, cursor: 'pointer', fontFamily: "'JetBrains Mono', monospace" }}>Reset Key</button>
+                  </div>
+                </div>
+              )}
+
+              <h1 style={{ margin: '4px 0 4px 0', fontSize: 28, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif", letterSpacing: -1, background: 'linear-gradient(135deg, #fff 30%, #00E5FF 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', lineHeight: 1.2 }}>
+                HC Cyber Intel
+              </h1>
+              <p style={{ margin: 0, fontSize: 13, color: 'rgba(255,255,255,0.35)', fontFamily: "'IBM Plex Sans', sans-serif" }}>
+                Healthcare Cybersecurity Intelligence {"\u00B7"} Zscaler Sales Enablement
+              </p>
+            </div>
+
+            {/* Stats bar */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 20 }}>
+              {[
+                { label: 'TOTAL INTEL', value: totalItems || '\u2014', color: '#00E5FF' },
+                { label: 'CRITICAL', value: criticalCount || '\u2014', color: '#FF1744' },
+                { label: 'LAST SCAN', value: lastUpdated ? lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Never', color: '#FFAB40' },
+              ].map((stat, i) => (
+                <div key={i} style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8, padding: '10px 14px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.5, color: 'rgba(255,255,255,0.3)', fontFamily: "'JetBrains Mono', monospace", marginBottom: 4 }}>{stat.label}</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: stat.color, fontFamily: "'Space Grotesk', sans-serif" }}>{stat.value}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Scan button */}
+            <button onClick={runFullScan} disabled={scanning}
+              style={{
+                width: '100%', padding: '14px 20px',
+                background: scanning ? 'rgba(255,171,64,0.08)' : 'linear-gradient(135deg, rgba(0,229,255,0.12) 0%, rgba(0,230,118,0.12) 100%)',
+                border: scanning ? '1px solid rgba(255,171,64,0.2)' : '1px solid rgba(0,229,255,0.2)',
+                borderRadius: 10, color: scanning ? '#FFAB40' : '#00E5FF', fontSize: 14, fontWeight: 700,
+                fontFamily: "'Space Grotesk', sans-serif", letterSpacing: 0.5,
+                cursor: scanning ? 'not-allowed' : 'pointer', transition: 'all 0.3s ease',
+                position: 'relative', overflow: 'hidden', marginBottom: 20
+              }}>
+              {scanning && <div style={{ position: 'absolute', bottom: 0, left: 0, height: 2, background: 'linear-gradient(90deg, transparent, #FFAB40, transparent)', width: '50%', animation: 'scanLine 1.5s ease-in-out infinite' }} />}
+              {scanning ? `\u27F3 Scanning... ${Math.round(scanProgress)}%` : '\u25B6 Run Full Intelligence Scan'}
+            </button>
+
+            {scanning && (
+              <div style={{ marginBottom: 20, height: 3, background: 'rgba(255,255,255,0.05)', borderRadius: 3, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${scanProgress}%`, background: 'linear-gradient(90deg, #00E5FF, #00E676)', borderRadius: 3, transition: 'width 0.5s ease' }} />
+              </div>
+            )}
+
+            {/* Filter pills */}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 20 }}>
+              <button onClick={() => setActiveFilter('all')}
+                style={{ padding: '6px 14px', borderRadius: 20, border: activeFilter === 'all' ? '1px solid rgba(255,255,255,0.3)' : '1px solid rgba(255,255,255,0.08)', background: activeFilter === 'all' ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.02)', color: activeFilter === 'all' ? 'white' : 'rgba(255,255,255,0.4)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif", transition: 'all 0.2s' }}>
+                All Feeds
+              </button>
+              {CATEGORIES.map(cat => (
+                <button key={cat.id} onClick={() => setActiveFilter(cat.id)}
+                  style={{ padding: '6px 14px', borderRadius: 20, border: activeFilter === cat.id ? `1px solid ${cat.color}50` : '1px solid rgba(255,255,255,0.06)', background: activeFilter === cat.id ? `${cat.color}15` : 'rgba(255,255,255,0.02)', color: activeFilter === cat.id ? cat.color : 'rgba(255,255,255,0.35)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: "'Space Grotesk', sans-serif", transition: 'all 0.2s' }}>
+                  {cat.icon} {cat.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Empty state */}
+            {!lastUpdated && !scanning && (
+              <div style={{ textAlign: 'center', padding: '60px 20px', color: 'rgba(255,255,255,0.2)' }}>
+                <div style={{ fontSize: 48, marginBottom: 12 }}>{"\u{1F6E1}\uFE0F"}</div>
+                <div style={{ fontSize: 16, fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, marginBottom: 6 }}>Ready to Scan</div>
+                <div style={{ fontSize: 13, fontFamily: "'IBM Plex Sans', sans-serif", maxWidth: 360, margin: '0 auto' }}>
+                  Hit "Run Full Intelligence Scan" to pull the latest healthcare cybersecurity intel from across the web.
+                </div>
+              </div>
+            )}
+
+            {filteredCategories.map(cat => (
+              <CategoryPanel key={cat.id} category={cat} data={results[cat.id]} loading={loading[cat.id]} error={errors[cat.id]} onRefresh={handleRefresh} />
+            ))}
+
+            {/* Footer */}
+            <div style={{ marginTop: 32, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.05)', textAlign: 'center', fontSize: 11, color: 'rgba(255,255,255,0.15)', fontFamily: "'JetBrains Mono', monospace" }}>
+              HC Cyber Intel {"\u00B7"} Powered by Claude AI + Web Search {"\u00B7"} Zscaler Healthcare
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+
+  <script>
+    // Register service worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(err => console.log('SW registration failed:', err));
+      });
+    }
+  </script>
+</body>
+</html>
