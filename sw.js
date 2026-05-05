@@ -1,4 +1,4 @@
-const CACHE_NAME = 'hc-cyber-intel-v1';
+const CACHE_NAME = 'hc-cyber-intel-v3';
 const STATIC_ASSETS = [
   '/hc-cyber-intel/',
   '/hc-cyber-intel/index.html',
@@ -22,9 +22,15 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
-  // Network-first for API calls, cache-first for static assets
   if (event.request.url.includes('api.anthropic.com')) {
     event.respondWith(fetch(event.request));
+    return;
+  }
+  // Network-first for HTML to always get latest version
+  if (event.request.url.endsWith('.html') || event.request.url.endsWith('/')) {
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match(event.request))
+    );
     return;
   }
   event.respondWith(
